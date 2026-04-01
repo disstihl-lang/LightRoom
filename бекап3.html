@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ArtRef - Помощник Художника</title>
+        <style>
+        :root {
+            --primary: #FF5F5F;
+            --bg-dark: #1f1f1f;
+        }
+        body {
+            background-color: var(--bg-dark);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            margin: 0;
+            color: white;
+            position: fixed;
+            width: 100vw;
+            height: 100dvh; 
+        }
+        .app-container {
+            width: 100vw;
+            height: 100dvh;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Зона для обработки касаний и жестов */
+        #interaction-zone {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+        }
+
+        #placeholder {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .img-layer {
+            position: absolute;
+            left: 50%; top: 50%;
+            transform-origin: 50% 50%;
+            max-width: none;
+            max-height: none;
+            pointer-events: none;
+            display: none;
+            will-change: transform, opacity, filter;
+        }
+        #ref-image { z-index: 3; }
+        #user-image { z-index: 4; }
+        
+        #grid-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            display: none;
+        }
+
+        .ui-element {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+            z-index: 100;
+        }
+        
+        .ui-hidden-state .hide-on-idle {
+            opacity: 0;
+            pointer-events: none !important;
+        }
+
+        .settings-drawer {
+            position: absolute;
+            top: 0; right: 0; width: 300px; height: 100%;
+            background: white;
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            box-shadow: -5px 0 25px rgba(0,0,0,0.5);
+            color: #333;
+            pointer-events: auto;
+        }
+        @media (max-width: 640px) { .settings-drawer { width: 85%; } }
+        .settings-drawer.open { transform: translateX(0); }
+
+        .drawer-handle {
+            position: absolute;
+            left: -48px; top: 80px; width: 48px; height: 48px;
+            background: white; border-radius: 12px 0 0 12px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--primary);
+            pointer-events: auto;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+        }
+
+        .perimeter-panel {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        
+        .edge-btn-container {
+            width: 54px;
+            height: 54px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+
+        .edge-btn {
+            width: 36px;
+            height: 36px;
+            background: #222; 
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #444;
+            color: white;
+            cursor: pointer;
+        }
+
+        .edge-btn.nudge-btn { background: var(--primary); border: none; }
+        .edge-btn.nudge-btn.user-mode { background: #22c55e; }
+        .edge-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+        
+        .p-top-left { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .p-top-center { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+        .p-top-right { position: absolute; top: 20px; right: 20px; }
+        .p-mid-left { position: absolute; top: 50%; left: 10px; transform: translateY(-50%); }
+        .p-mid-right { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); }
+        .p-bottom-left { position: absolute; bottom: 30px; left: 20px; }
+        .p-bottom-center {
+            position: absolute;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: center;
+        }
+        .p-bottom-center .edge-btn-container { width: 38px; height: 38px; }
+        .p-bottom-center .edge-btn.nudge-btn { border: 1px solid rgba(255,255,255,0.18); }
+        .p-bottom-right { position: absolute; bottom: 30px; right: 20px; }
+        .nav-row-top { display: flex; gap: 10px; align-items: center; justify-content: center; }
+        .nav-row-main { display: flex; gap: 10px; align-items: center; justify-content: center; order: 1; }
+        .nav-row-secondary { display: flex; gap: 10px; align-items: center; justify-content: center; order: 2; }
+        .target-row { display: flex; gap: 10px; align-items: center; justify-content: center; }
+        
+        .target-indicator {
+            background: rgba(0,0,0,0.8);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            pointer-events: auto;
+            border: 1px solid var(--primary);
+            cursor: pointer;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+        .target-indicator.user-mode { border-color: #4ade80; color: #4ade80; }
+
+        .btn-disabled { opacity: 0.3; pointer-events: none; }
+        .active-btn { background-color: var(--primary) !important; color: white !important; border-color: var(--primary) !important; }
+        
+        /* Ползунки */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer; background: #e5e7eb;
+            border-radius: 2px;
+        }
+
+        /* Локальные utility-классы вместо Tailwind CDN */
+        .hidden { display: none; }
+        .text-center { text-align: center; }
+        .text-white { color: #fff; }
+        .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+        .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+        .text-xs { font-size: 0.75rem; line-height: 1rem; }
+        .text-\[10px\] { font-size: 10px; line-height: 1.2; }
+        .text-\[9px\] { font-size: 9px; line-height: 1.2; }
+        .font-bold { font-weight: 700; }
+        .uppercase { text-transform: uppercase; }
+        .tracking-widest { letter-spacing: .1em; }
+        .text-red-400 { color: #f87171; }
+        .text-red-500 { color: #ef4444; }
+        .text-gray-400 { color: #9ca3af; }
+        .text-gray-600 { color: #4b5563; }
+        .text-gray-700 { color: #374151; }
+        .text-gray-800 { color: #1f2937; }
+        .mb-2 { margin-bottom: .5rem; }
+        .mb-1 { margin-bottom: .25rem; }
+        .p-6 { padding: 1.5rem; }
+        .pb-2 { padding-bottom: .5rem; }
+        .pt-4 { padding-top: 1rem; }
+        .space-y-6 > * + * { margin-top: 1.5rem; }
+        .space-y-5 > * + * { margin-top: 1.25rem; }
+        .space-y-2 > * + * { margin-top: .5rem; }
+        .grid { display: grid; }
+        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .gap-2 { gap: .5rem; }
+        .py-3 { padding-top: .75rem; padding-bottom: .75rem; }
+        .border-t { border-top: 1px solid #e5e7eb; }
+        .border-b { border-bottom: 1px solid #e5e7eb; }
+        .border-2 { border-width: 2px; border-style: solid; }
+        .border-gray-100 { border-color: #f3f4f6; }
+        .rounded-xl { border-radius: .75rem; }
+        .hover\:bg-gray-50:hover { background-color: #f9fafb; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div id="placeholder" class="text-center">
+        <p class="text-2xl font-bold text-white mb-2">ArtRef</p>
+        <p class="text-xs text-red-400 uppercase tracking-widest">Загрузите референс</p>
+    </div>
+
+    <!-- Холст с изображениями и сеткой -->
+    <svg id="grid-overlay"></svg>
+    <img id="ref-image" class="img-layer" alt="Референс">
+    <img id="user-image" class="img-layer" alt="Пользовательский рисунок">
+
+    <!-- Зона касаний -->
+    <div id="interaction-zone"></div>
+
+    <!-- UI Элементы -->
+    <div id="perimeter-panel" class="perimeter-panel ui-element hide-on-idle">
+        
+        <div class="p-top-left">
+            <div class="edge-btn-container" onclick="toggleGrid()">
+                <div class="edge-btn" id="grid-btn"><svg viewBox="0 0 24 24"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke="currentColor"/></svg></div>
+            </div>
+            <div class="edge-btn-container" onclick="resetAll()">
+                <div class="edge-btn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5" stroke="currentColor"/></svg></div>
+            </div>
+        </div>
+        
+        <div class="p-top-center">
+            <div class="edge-btn-container" onclick="toggleUserVisibility()">
+                <div class="edge-btn" id="vis-btn">
+                    <svg id="eye-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </div>
+            </div>
+            <div class="edge-btn-container" onclick="toggleLink()">
+                <div class="edge-btn" id="link-btn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+            </div>
+        </div>
+
+        <div class="p-bottom-center">
+            <div class="nav-row-top">
+                <div class="edge-btn-container" onpointerdown="startNudge('r', -1)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/></svg></div>
+                </div>
+                <div class="edge-btn-container" onpointerdown="startNudge('y', -2)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg></div>
+                </div>
+                <div class="edge-btn-container" onpointerdown="startNudge('r', 1)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/></svg></div>
+                </div>
+            </div>
+            <div class="nav-row-main">
+                <div class="edge-btn-container" onpointerdown="startNudge('s', 0.99)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></div>
+                </div>
+                <div class="edge-btn-container" onpointerdown="startNudge('x', -2)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></div>
+                </div>
+                <div class="edge-btn-container" onpointerdown="startNudge('y', 2)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+                </div>
+                <div class="edge-btn-container" onpointerdown="startNudge('x', 2)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+                </div>
+                <div class="edge-btn-container" onpointerdown="startNudge('s', 1.01)" onpointerup="stopNudge()" onpointerleave="stopNudge()">
+                    <div class="edge-btn nudge-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Панель настроек -->
+    <aside id="drawer" class="settings-drawer ui-element">
+        <div class="drawer-handle" onclick="toggleDrawer()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </div>
+        <div class="p-6 space-y-6">
+            <h2 class="text-xl font-bold border-b pb-2 text-gray-800">Инструменты</h2>
+            
+            <div class="space-y-2">
+                <p class="text-[10px] font-bold text-gray-400 uppercase">Загрузка слоев</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="document.getElementById('ref-input').click()" class="py-3 border-2 border-gray-100 rounded-xl text-[10px] font-bold uppercase text-gray-700 hover:bg-gray-50">Референс</button>
+                    <button id="user-btn-load" onclick="document.getElementById('user-input').click()" class="py-3 border-2 border-gray-100 rounded-xl text-[10px] font-bold uppercase text-gray-700 hover:bg-gray-50 btn-disabled">Рисунок</button>
+                </div>
+                <div>
+                    <button onclick="clearAllLayers()" class="py-3 border-2 border-gray-100 rounded-xl text-[10px] font-bold uppercase text-red-500 hover:bg-gray-50" style="width: 100%;">Удалить все</button>
+                </div>
+                <!-- Загрузка файлов работает через коллбэки (без await) -->
+                <input type="file" id="ref-input" class="hidden" accept="image/*" onchange="loadFile(this, 'ref')">
+                <input type="file" id="user-input" class="hidden" accept="image/*" onchange="loadFile(this, 'user')">
+            </div>
+
+            <div class="space-y-5 pt-4 border-t">
+                <div id="layer-name" class="text-xs font-bold text-red-500 uppercase">Настройка: Референс</div>
+                
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[9px] uppercase text-gray-400">Прозрачность</label>
+                        <span id="op-val" class="text-[10px] font-bold text-gray-600">100%</span>
+                    </div>
+                    <input type="range" id="op-slider" min="0" max="100" value="100" oninput="updateFilters()">
+                </div>
+                
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[9px] uppercase text-gray-400">Контрастность</label>
+                        <span id="ct-val" class="text-[10px] font-bold text-gray-600">100%</span>
+                    </div>
+                    <input type="range" id="ct-slider" min="0" max="200" value="100" oninput="updateFilters()">
+                </div>
+                
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[9px] uppercase text-gray-400">Яркость</label>
+                        <span id="br-val" class="text-[10px] font-bold text-gray-600">100%</span>
+                    </div>
+                    <input type="range" id="br-slider" min="0" max="200" value="100" oninput="updateFilters()">
+                </div>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script>
+    // --- Состояние приложения ---
+    let states = {
+        ref: { x: window.innerWidth/2, y: window.innerHeight/2, s: 1, r: 0, opacity: 1, contrast: 100, brightness: 100 },
+        user: { x: window.innerWidth/2, y: window.innerHeight/2, s: 1, r: 0, opacity: 0.8, contrast: 100, brightness: 100 }
+    };
+    
+    let currentTarget = null;
+    let isLinked = false;
+    let isUserVisible = true;
+    let gridVisible = false;
+    
+    let activePointers = new Map();
+    let pinchState = null;
+    let nudgeInterval = null;
+    let idleTimer = null;
+
+    // Ссылки на DOM
+    const refEl = document.getElementById('ref-image');
+    const userEl = document.getElementById('user-image');
+    const zone = document.getElementById('interaction-zone');
+    const placeholderEl = document.getElementById('placeholder');
+    const userBtnLoadEl = document.getElementById('user-btn-load');
+    const drawerEl = document.getElementById('drawer');
+    const gridBtnEl = document.getElementById('grid-btn');
+    const gridOverlayEl = document.getElementById('grid-overlay');
+    const layerNameEl = document.getElementById('layer-name');
+    const opSliderEl = document.getElementById('op-slider');
+    const opValEl = document.getElementById('op-val');
+    const ctSliderEl = document.getElementById('ct-slider');
+    const ctValEl = document.getElementById('ct-val');
+    const brSliderEl = document.getElementById('br-slider');
+    const brValEl = document.getElementById('br-val');
+    const nudgeButtons = document.querySelectorAll('.nudge-btn');
+
+    function createDefaultState(type) {
+        return {
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+            s: 1,
+            r: 0,
+            opacity: type === 'user' ? 0.8 : 1,
+            contrast: 100,
+            brightness: 100
+        };
+    }
+
+    // --- Логика файлов и сжатия (без await, полностью на коллбэках) ---
+    function loadFile(input, type) {
+        if (!input.files || !input.files[0]) return;
+        const file = input.files[0];
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                // Сжимаем изображение, чтобы избежать переполнения localStorage
+                const canvas = document.createElement('canvas');
+                const MAX_DIM = 1400; // Безопасное разрешение
+                let w = img.width;
+                let h = img.height;
+                
+                if (w > MAX_DIM || h > MAX_DIM) {
+                    if (w > h) { h = Math.round(h * (MAX_DIM / w)); w = MAX_DIM; }
+                    else { w = Math.round(w * (MAX_DIM / h)); h = MAX_DIM; }
+                }
+                
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                
+                // Получаем DataURL (JPEG 0.8)
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+                // Применяем
+                const el = type === 'ref' ? refEl : userEl;
+                el.src = dataUrl;
+                el.style.display = 'block';
+                placeholderEl.style.display = 'none';
+                
+                if (type === 'ref') {
+                    userBtnLoadEl.classList.remove('btn-disabled');
+                }
+
+                fitImageToScreen(el, type);
+                autoSelectTargetMode();
+                updateTargetUI();
+                updateTransform(type);
+                saveState();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        
+        // Очищаем инпут
+        input.value = '';
+    }
+
+    function clearLayer(type) {
+        const isRef = type === 'ref';
+        const el = isRef ? refEl : userEl;
+        el.removeAttribute('src');
+        el.style.display = 'none';
+
+        if (isRef) {
+            userEl.removeAttribute('src');
+            userEl.style.display = 'none';
+            states.ref = createDefaultState('ref');
+            states.user = createDefaultState('user');
+            userBtnLoadEl.classList.add('btn-disabled');
+        } else {
+            states.user = createDefaultState('user');
+        }
+
+        const hasAnyImage = hasImageLoaded(refEl) || hasImageLoaded(userEl);
+        placeholderEl.style.display = hasAnyImage ? 'none' : 'block';
+        autoSelectTargetMode();
+        updateTargetUI();
+        updateTransform('ref');
+        updateTransform('user');
+        saveState();
+    }
+
+    function clearAllLayers() {
+        clearLayer('ref');
+    }
+
+    // --- Трансформации ---
+    function updateTransform(type) {
+        const el = type === 'ref' ? refEl : userEl;
+        if (!hasImageLoaded(el)) return;
+        const s = states[type];
+        const cx = window.innerWidth / 2;
+        const cy = window.innerHeight / 2;
+        
+        el.style.transform = `translate(-50%, -50%) translate(${s.x - cx}px, ${s.y - cy}px) rotate(${s.r}deg) scale(${s.s})`;
+        el.style.opacity = (type === 'user' && !isUserVisible) ? 0 : s.opacity;
+        el.style.filter = `contrast(${s.contrast}%) brightness(${s.brightness}%)`;
+    }
+
+    function fitImageToScreen(img, type) {
+        if (!img || !img.naturalWidth) return;
+        const s = states[type];
+        const sc = Math.min(window.innerWidth / img.naturalWidth, window.innerHeight / img.naturalHeight) * 0.8;
+        s.x = window.innerWidth / 2;
+        s.y = window.innerHeight / 2;
+        s.s = sc;
+        s.r = 0;
+        updateTransform(type);
+    }
+
+
+    // --- UI и Ползунки ---
+    function hasImageLoaded(el) {
+        return !!(el && el.src && el.src !== '');
+    }
+
+    function getAutoFocusMode() {
+        const hasRef = hasImageLoaded(refEl);
+        const hasUser = hasImageLoaded(userEl);
+
+        if (!hasRef && !hasUser) return 'empty';
+        if (!hasRef && hasUser) return 'user';
+        if (hasRef && !hasUser) return 'ref';
+        if (!isUserVisible) return 'ref';
+        if (hasUser) return 'user';
+        return 'empty';
+    }
+
+    function autoSelectTargetMode() {
+        const mode = getAutoFocusMode();
+        currentTarget = mode === 'empty' ? null : mode;
+    }
+
+    function manualToggleTarget() {
+        autoSelectTargetMode();
+        updateTargetUI();
+    }
+
+    function updateTargetUI() {
+        const isEmpty = currentTarget === null;
+        const isUser = currentTarget === 'user';
+        const ui = document.getElementById('target-ui');
+        if (ui) {
+            if (isEmpty) {
+                ui.innerText = 'СЛОЙ: ПУСТО';
+                ui.className = 'target-indicator';
+            } else {
+                ui.innerText = isUser ? 'СЛОЙ: РИСУНОК' : 'СЛОЙ: РЕФЕРЕНС';
+                ui.className = `target-indicator ${isUser ? 'user-mode' : ''}`;
+            }
+        }
+        layerNameEl.innerText = isEmpty
+            ? 'Настройка: —'
+            : `Настройка: ${isUser ? 'Рисунок' : 'Референс'}`;
+
+        nudgeButtons.forEach(function(btn) {
+            btn.classList.toggle('user-mode', isUser);
+        });
+
+        syncSliders();
+    }
+
+    function toggleDrawer() { 
+        drawerEl.classList.toggle('open'); 
+        syncSliders(); 
+        resetIdleTimer();
+    }
+    
+    function toggleLink() { 
+        isLinked = !isLinked; 
+        document.getElementById('link-btn').classList.toggle('active-btn', isLinked); 
+        resetIdleTimer();
+    }
+    
+    function toggleUserVisibility() { 
+        isUserVisible = !isUserVisible; 
+        document.getElementById('vis-btn').classList.toggle('active-btn', !isUserVisible);
+        updateTransform('user'); 
+        autoSelectTargetMode();
+        updateTargetUI();
+        resetIdleTimer();
+    }
+
+    function toggleGrid() {
+        gridVisible = !gridVisible;
+        gridBtnEl.classList.toggle('active-btn', gridVisible);
+        const svg = gridOverlayEl;
+        if (!gridVisible) {
+            svg.style.display = 'none';
+            return;
+        }
+        svg.style.display = 'block';
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const step = w / 10;
+        const gridStrokeColor = 'rgba(255, 255, 255, 0.2)';
+        let linesMarkup = '';
+
+        for (let x = 0; x <= w; x += step) {
+            linesMarkup += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="${gridStrokeColor}" />`;
+        }
+        for (let y = 0; y <= h; y += step) {
+            linesMarkup += `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${gridStrokeColor}" />`;
+        }
+
+        svg.innerHTML = linesMarkup;
+        resetIdleTimer();
+    }
+
+    function resetAll() {
+        resetIdleTimer();
+        if (hasImageLoaded(refEl)) fitImageToScreen(refEl, 'ref');
+        if (hasImageLoaded(userEl)) fitImageToScreen(userEl, 'user');
+        
+        states.ref.contrast = 100; states.ref.brightness = 100; states.ref.opacity = 1;
+        states.user.opacity = 0.8; states.user.contrast = 100; states.user.brightness = 100;
+        
+        updateTransform('ref');
+        updateTransform('user');
+        syncSliders();
+        saveState();
+    }
+
+    function syncSliders() { 
+        if (!currentTarget) {
+            opSliderEl.value = 100;
+            opValEl.innerText = '—';
+            ctSliderEl.value = 100;
+            ctValEl.innerText = '—';
+            brSliderEl.value = 100;
+            brValEl.innerText = '—';
+            return;
+        }
+        const s = states[currentTarget];
+        opSliderEl.value = s.opacity * 100;
+        opValEl.innerText = Math.round(s.opacity * 100) + '%';
+
+        ctSliderEl.value = s.contrast;
+        ctValEl.innerText = Math.round(s.contrast) + '%';
+
+        brSliderEl.value = s.brightness;
+        brValEl.innerText = Math.round(s.brightness) + '%';
+    }
+
+    function updateFilters() { 
+        if (!currentTarget) {
+            return;
+        }
+        const s = states[currentTarget];
+        s.opacity = opSliderEl.value / 100; 
+        s.contrast = ctSliderEl.value;
+        s.brightness = brSliderEl.value;
+        
+        syncSliders();
+        updateTransform(currentTarget); 
+        autoSelectTargetMode();
+        updateTargetUI();
+        resetIdleTimer();
+        saveState();
+    }
+
+    // --- Авто-скрытие интерфейса ---
+    function resetIdleTimer() { 
+        document.body.classList.remove('ui-hidden-state'); 
+        if (idleTimer) clearTimeout(idleTimer); 
+        idleTimer = setTimeout(function() {
+            if (!drawerEl.classList.contains('open')) {
+                document.body.classList.add('ui-hidden-state');
+            }
+        }, 6000); 
+    }
+
+    // --- Жесты и перемещение ---
+    zone.addEventListener('pointerdown', function(e) {
+        resetIdleTimer();
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (activePointers.size === 2) {
+            if (!currentTarget && !isLinked) return;
+            const points = Array.from(activePointers.values());
+            const dx = points[0].x - points[1].x;
+            const dy = points[0].y - points[1].y;
+            const list = isLinked ? ['ref', 'user'] : [currentTarget];
+            pinchState = {
+                startDistance: Math.hypot(dx, dy),
+                startScales: Object.fromEntries(list.map(function(k) { return [k, states[k].s]; })),
+                hasStarted: false
+            };
+        }
+    });
+
+    zone.addEventListener('pointermove', function(e) {
+        if (!activePointers.has(e.pointerId)) return;
+        
+        const list = isLinked ? ['ref', 'user'] : [currentTarget];
+        if (!currentTarget && !isLinked) return;
+        if (activePointers.size >= 2 && pinchState) {
+            activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            const points = Array.from(activePointers.values());
+            const dx = points[0].x - points[1].x;
+            const dy = points[0].y - points[1].y;
+            const distance = Math.hypot(dx, dy);
+            const pinchDelta = Math.abs(distance - pinchState.startDistance);
+            if (!pinchState.hasStarted) {
+                // Игнорируем микродвижение в момент первого касания двумя пальцами,
+                // чтобы избежать скачка масштаба на старте жеста.
+                if (pinchDelta < 8) return;
+                pinchState.hasStarted = true;
+                pinchState.startDistance = distance;
+                pinchState.startScales = Object.fromEntries(list.map(function(k) { return [k, states[k].s]; }));
+            }
+            if (pinchState.startDistance > 0) {
+                const zoomRatio = distance / pinchState.startDistance;
+                list.forEach(function(k) {
+                    const baseScale = pinchState.startScales[k] || states[k].s;
+                    states[k].s = Math.max(0.02, Math.min(20, baseScale * zoomRatio));
+                    updateTransform(k);
+                });
+            }
+            return;
+        }
+
+        const prev = activePointers.get(e.pointerId);
+        const dx = e.clientX - prev.x;
+        const dy = e.clientY - prev.y;
+        list.forEach(function(k) {
+            states[k].x += dx;
+            states[k].y += dy;
+            updateTransform(k);
+        });
+        
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    });
+
+    function handlePointerUp(e) {
+        if (activePointers.has(e.pointerId)) {
+            activePointers.delete(e.pointerId);
+            if (activePointers.size < 2) pinchState = null;
+            saveState();
+        }
+    }
+    zone.addEventListener('pointerup', handlePointerUp);
+    zone.addEventListener('pointercancel', handlePointerUp);
+    zone.addEventListener('pointerout', handlePointerUp);
+
+
+    // --- Управление по краям (Кнопки точной настройки) ---
+    function startNudge(key, val) {
+        stopNudge();
+        resetIdleTimer();
+        const step = function() {
+            const list = isLinked ? ['ref', 'user'] : [currentTarget];
+            if (!currentTarget && !isLinked) return;
+            list.forEach(function(k) {
+                const s = states[k];
+                if (key === 'x') s.x += val;
+                if (key === 'y') s.y += val;
+                if (key === 's') { s.s *= val; }
+                if (key === 'r') {
+                    s.r += val;
+                }
+                updateTransform(k);
+            });
+        };
+        step();
+        nudgeInterval = setInterval(step, 30);
+    }
+    
+    function stopNudge() { 
+        if (nudgeInterval) {
+            clearInterval(nudgeInterval); 
+            nudgeInterval = null;
+            saveState(); 
+        }
+    }
+
+    // --- Сохранение в LocalStorage ---
+    function saveState() {
+        const data = {
+            states: states,
+            isUserVisible: isUserVisible,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            refData: hasImageLoaded(refEl) ? refEl.src : null,
+            userData: hasImageLoaded(userEl) ? userEl.src : null
+        };
+        try { 
+            // Храним данные ключом artref_v5
+            localStorage.setItem('artref_v5', JSON.stringify(data)); 
+        } catch(e) { 
+            console.warn("Storage full", e); 
+        }
+    }
+
+    // --- Инициализация при старте ---
+    window.addEventListener('DOMContentLoaded', function() {
+        try {
+            const saved = localStorage.getItem('artref_v5');
+            if (saved) {
+                const d = JSON.parse(saved);
+                if (d.states) states = d.states;
+                if (d.isUserVisible !== undefined) isUserVisible = d.isUserVisible;
+
+                const hasViewport = !!(d.viewport && d.viewport.width && d.viewport.height);
+                const viewportChanged = !hasViewport || d.viewport.width !== window.innerWidth || d.viewport.height !== window.innerHeight;
+                const applyLayer = function(el, type, dataUrl) {
+                    if (!dataUrl) return;
+                    el.src = dataUrl;
+                    el.style.display = 'block';
+
+                    const applyPlacement = function() {
+                        if (viewportChanged) fitImageToScreen(el, type);
+                        else updateTransform(type);
+                    };
+
+                    if (el.complete) applyPlacement();
+                    else el.onload = applyPlacement;
+                };
+
+                if (d.refData) {
+                    applyLayer(refEl, 'ref', d.refData);
+                    userBtnLoadEl.classList.remove('btn-disabled');
+                    placeholderEl.style.display = 'none';
+                }
+                if (d.userData) {
+                    applyLayer(userEl, 'user', d.userData);
+                    placeholderEl.style.display = 'none';
+                }
+
+                if (!d.refData) updateTransform('ref');
+                if (!d.userData) updateTransform('user');
+            }
+        } catch(e) {
+            console.error("Error loading state:", e);
+        }
+        autoSelectTargetMode();
+        updateTargetUI();
+        
+        // Перерисовываем элементы при ресайзе
+        window.addEventListener('resize', function() {
+            updateTransform('ref');
+            updateTransform('user');
+            if (gridVisible) {
+                gridVisible = false;
+                toggleGrid(); // Перерисовать сетку под новый размер
+            }
+        });
+
+        resetIdleTimer();
+    });
+</script>
+
+</body>
+</html>
