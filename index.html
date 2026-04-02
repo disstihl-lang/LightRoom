@@ -6,152 +6,47 @@
   <title>LightRoom · Layer Study</title>
   <style>
     :root {
-      --bg: #0c0d11;
-      --surface: rgba(20, 22, 28, 0.84);
-      --surface-2: rgba(34, 38, 48, 0.92);
-      --stroke: rgba(255, 255, 255, 0.14);
-      --text: #f8fafc;
-      --muted: #9aa4b2;
-      --accent: #fb7185;
+      --bg: #111214;
+      --panel: #1e2024;
+      --panel-2: #282c33;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --accent: #ff6b6b;
       --ref: #f59e0b;
-      --user: #22c55e;
-      --shadow: 0 14px 45px rgba(0, 0, 0, 0.45);
+      --user: #10b981;
     }
-
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      touch-action: none;
-      background:
-        radial-gradient(circle at 15% 15%, #1e293b 0%, transparent 34%),
-        radial-gradient(circle at 85% 80%, #3b0764 0%, transparent 30%),
-        var(--bg);
-      color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    html, body { margin:0; height:100%; background:var(--bg); color:var(--text); overflow:hidden; touch-action:none; }
+    body { font-family: Inter, system-ui, sans-serif; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+    .app { height:100%; position:relative; }
+    .stage-wrap { position:absolute; inset:0; }
+    #stage-root { width:100%; height:100%; }
+    #grid-overlay { position:absolute; inset:0; display:none; pointer-events:none; }
+
+    .topbar, .bottombar, .drawer {
+      position:absolute; z-index:5; background:rgba(30,32,36,.95); border:1px solid #3a3f47; backdrop-filter: blur(8px);
+      transition: opacity .25s ease;
     }
+    .topbar { top:14px; left:14px; right:14px; border-radius:12px; padding:10px; display:grid; gap:8px; }
+    .topbar-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .bottombar { left:50%; transform:translateX(-50%); bottom:14px; border-radius:14px; padding:8px; display:grid; gap:8px; min-width:min(640px, calc(100vw - 24px)); }
+    .drawer { top:14px; right:14px; width:min(340px, calc(100vw - 28px)); border-radius:12px; padding:10px; max-height:calc(100vh - 28px); overflow:auto; }
 
-    body {
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    }
+    .ui-hidden .topbar, .ui-hidden .bottombar, .ui-hidden .drawer { opacity:0; pointer-events:none; }
 
-    .app { position: relative; width: 100%; height: 100%; }
-    .stage-wrap { position: absolute; inset: 0; }
-    #stage-root { width: 100%; height: 100%; }
-    #grid-overlay { position: absolute; inset: 0; display: none; pointer-events: none; }
-
-    .glass {
-      background: var(--surface);
-      border: 1px solid var(--stroke);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px) saturate(130%);
-    }
-
-    .topbar {
-      position: absolute;
-      z-index: 4;
-      left: 12px;
-      right: 12px;
-      top: 12px;
-      border-radius: 18px;
-      padding: 10px;
-      display: grid;
-      gap: 8px;
-    }
-
-    .topbar-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .bottombar {
-      position: absolute;
-      z-index: 4;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: 14px;
-      width: min(640px, calc(100vw - 24px));
-      border-radius: 18px;
-      padding: 10px;
-    }
-
-    .drawer {
-      position: absolute;
-      z-index: 4;
-      right: 12px;
-      top: 122px;
-      width: min(320px, calc(100vw - 24px));
-      border-radius: 18px;
-      padding: 12px;
-    }
-
-    .ui-hidden .topbar,
-    .ui-hidden .bottombar,
-    .ui-hidden .drawer {
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(6px);
-      transition: .25s ease;
-    }
-
-    h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
-
-    input[type="file"],
-    button,
-    select {
-      height: 38px;
-      border-radius: 11px;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      background: var(--surface-2);
-      color: var(--text);
-      padding: 0 10px;
-    }
-
-    input[type="file"] { padding-top: 8px; }
-    button { cursor: pointer; font-weight: 600; }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .danger { background: rgba(220, 38, 38, 0.3); }
-    .grow { flex: 1; min-width: 150px; }
-    .pill { border-radius: 999px; }
-    .mode { min-width: 92px; }
-    .mode.active-ref { border-color: var(--ref); box-shadow: 0 0 0 1px var(--ref) inset; color: #ffd18a; }
-    .mode.active-user { border-color: var(--user); box-shadow: 0 0 0 1px var(--user) inset; color: #9af3c2; }
-
-    label {
-      display: grid;
-      gap: 4px;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 8px;
-    }
-
-    input[type="range"] { width: 100%; accent-color: var(--accent); }
-
-    .nudge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
-
-    .placeholder {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      padding: 14px 20px;
-      border-radius: 14px;
-      font-size: 19px;
-      color: #c8d2e1;
-      border: 1px dashed rgba(255, 255, 255, 0.38);
-      background: rgba(15, 18, 25, 0.58);
-      pointer-events: none;
-    }
-
-    .hidden { display: none; }
-
-    @media (max-width: 900px) {
-      .drawer { top: auto; bottom: 130px; width: calc(100vw - 24px); left: 12px; right: 12px; }
-    }
+    button, select, input[type="file"] { background:var(--panel-2); border:1px solid #464d58; color:var(--text); border-radius:9px; padding:8px 10px; }
+    button { cursor:pointer; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .pill { border-radius:999px; }
+    .mode.active-ref { border-color:var(--ref); box-shadow:0 0 0 1px var(--ref) inset; }
+    .mode.active-user { border-color:var(--user); box-shadow:0 0 0 1px var(--user) inset; }
+    .grow { flex:1; }
+    .nudge-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .placeholder { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:var(--muted); font-size:20px; pointer-events:none; }
+    .hidden { display:none; }
+    label { font-size:12px; color:var(--muted); display:grid; gap:3px; }
+    input[type="range"] { width:100%; }
   </style>
 </head>
 <body>
@@ -162,11 +57,11 @@
       <div id="placeholder" class="placeholder">Загрузите референс</div>
     </div>
 
-    <section class="topbar glass">
+    <section class="topbar">
       <div class="topbar-row">
         <input id="ref-input" type="file" accept="image/*" class="grow" />
         <input id="user-input" type="file" accept="image/*" class="grow" />
-        <button id="clear-all" class="danger">Удалить всё</button>
+        <button id="clear-all">Удалить всё</button>
       </div>
       <div class="topbar-row">
         <button id="target-ref" class="mode pill">Референс</button>
@@ -179,14 +74,14 @@
       </div>
     </section>
 
-    <section class="drawer glass" id="drawer">
-      <h3>Настройки слоя</h3>
+    <section class="drawer" id="drawer">
+      <h3 style="margin:0 0 8px;">Настройки слоя</h3>
       <label>Opacity <input id="opacity-slider" type="range" min="0" max="100" value="100" /></label>
       <label>Brightness <input id="brightness-slider" type="range" min="0" max="200" value="100" /></label>
       <label>Contrast <input id="contrast-slider" type="range" min="0" max="200" value="100" /></label>
     </section>
 
-    <section class="bottombar glass">
+    <section class="bottombar">
       <div class="nudge-grid">
         <span></span><button id="nudge-up">⬆️</button><span></span>
         <button id="nudge-left">⬅️</button><button id="nudge-down">⬇️</button><button id="nudge-right">➡️</button>
