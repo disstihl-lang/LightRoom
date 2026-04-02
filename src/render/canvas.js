@@ -6,7 +6,9 @@ export function createCanvas(root) {
     draggable: true,
   });
 
+  const gridLayer = new Konva.Layer({ listening: false, visible: false });
   const layer = new Konva.Layer();
+  stage.add(gridLayer);
   stage.add(layer);
 
   const transformer = new Konva.Transformer({
@@ -27,9 +29,35 @@ export function createCanvas(root) {
   window.addEventListener('resize', () => {
     stage.width(root.clientWidth);
     stage.height(root.clientHeight);
+    drawGrid();
   });
 
-  return { stage, layer, transformer };
+  function drawGrid() {
+    gridLayer.destroyChildren();
+    const width = stage.width();
+    const height = stage.height();
+    const step = Math.max(60, Math.floor(width / 10));
+
+    for (let x = 0; x <= width; x += step) {
+      gridLayer.add(new Konva.Line({
+        points: [x, 0, x, height],
+        stroke: 'rgba(255,255,255,0.2)',
+        strokeWidth: 1,
+      }));
+    }
+
+    for (let y = 0; y <= height; y += step) {
+      gridLayer.add(new Konva.Line({
+        points: [0, y, width, y],
+        stroke: 'rgba(255,255,255,0.2)',
+        strokeWidth: 1,
+      }));
+    }
+  }
+
+  drawGrid();
+
+  return { stage, layer, transformer, gridLayer, drawGrid };
 }
 
 export function hydrateNodeFromObject(node, object) {
