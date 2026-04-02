@@ -2,94 +2,92 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ArtRef · Konva Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <title>LightRoom · Layer Study</title>
   <style>
-    :root { --bg:#121212; --panel:#1f1f1f; --accent:#ff5f5f; --text:#f5f5f5; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:Inter,system-ui,sans-serif; background:var(--bg); color:var(--text); }
-    .app { display:grid; grid-template-columns: 290px 1fr; height:100vh; }
-    .panel { background:var(--panel); padding:14px; overflow:auto; border-right:1px solid #333; }
-    h1 { font-size:16px; margin:0 0 10px; }
-    .group { margin:0 0 14px; padding:10px; border:1px solid #333; border-radius:10px; }
-    .group h2 { margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#bbb; }
-    button, input, select { width:100%; margin:4px 0; }
-    button { background:#2b2b2b; color:#fff; border:1px solid #444; border-radius:8px; padding:8px; cursor:pointer; }
-    button.primary { background:var(--accent); border-color:var(--accent); }
-    .row { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+    :root {
+      --bg: #111214;
+      --panel: #1e2024;
+      --panel-2: #282c33;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --accent: #ff6b6b;
+      --ref: #f59e0b;
+      --user: #10b981;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin:0; height:100%; background:var(--bg); color:var(--text); overflow:hidden; touch-action:none; }
+    body { font-family: Inter, system-ui, sans-serif; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+    .app { height:100%; position:relative; }
+    .stage-wrap { position:absolute; inset:0; }
     #stage-root { width:100%; height:100%; }
-    .hint { font-size:12px; color:#a3a3a3; margin-top:8px; }
+    #grid-overlay { position:absolute; inset:0; display:none; pointer-events:none; }
+
+    .topbar, .bottombar, .drawer {
+      position:absolute; z-index:5; background:rgba(30,32,36,.95); border:1px solid #3a3f47; backdrop-filter: blur(8px);
+      transition: opacity .25s ease;
+    }
+    .topbar { top:14px; left:14px; right:14px; border-radius:12px; padding:10px; display:grid; gap:8px; }
+    .topbar-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .bottombar { left:50%; transform:translateX(-50%); bottom:14px; border-radius:14px; padding:8px; display:grid; gap:8px; min-width:min(640px, calc(100vw - 24px)); }
+    .drawer { top:14px; right:14px; width:min(340px, calc(100vw - 28px)); border-radius:12px; padding:10px; max-height:calc(100vh - 28px); overflow:auto; }
+
+    .ui-hidden .topbar, .ui-hidden .bottombar, .ui-hidden .drawer { opacity:0; pointer-events:none; }
+
+    button, select, input[type="file"] { background:var(--panel-2); border:1px solid #464d58; color:var(--text); border-radius:9px; padding:8px 10px; }
+    button { cursor:pointer; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .pill { border-radius:999px; }
+    .mode.active-ref { border-color:var(--ref); box-shadow:0 0 0 1px var(--ref) inset; }
+    .mode.active-user { border-color:var(--user); box-shadow:0 0 0 1px var(--user) inset; }
+    .grow { flex:1; }
+    .nudge-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .placeholder { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:var(--muted); font-size:20px; pointer-events:none; }
+    .hidden { display:none; }
+    label { font-size:12px; color:var(--muted); display:grid; gap:3px; }
+    input[type="range"] { width:100%; }
   </style>
 </head>
 <body>
-  <div class="app">
-    <aside class="panel">
-      <h1>ArtRef · Редактор</h1>
+  <div class="app" id="app-root">
+    <div class="stage-wrap">
+      <main id="stage-root"></main>
+      <svg id="grid-overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="placeholder" class="placeholder">Загрузите референс</div>
+    </div>
 
-      <section class="group">
-        <h2>Изображения</h2>
-        <input id="ref-input" type="file" accept="image/*" />
-        <input id="user-input" type="file" accept="image/*" />
-        <div class="row">
-          <button id="toggle-grid">Сетка</button>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;">
-            <input id="link-images" type="checkbox" style="width:auto;margin:0;" />
-            Связать слои
-          </label>
-        </div>
-      </section>
+    <section class="topbar">
+      <div class="topbar-row">
+        <input id="ref-input" type="file" accept="image/*" class="grow" />
+        <input id="user-input" type="file" accept="image/*" class="grow" />
+        <button id="clear-all">Удалить всё</button>
+      </div>
+      <div class="topbar-row">
+        <button id="target-ref" class="mode pill">Референс</button>
+        <button id="target-user" class="mode pill">Рисунок</button>
+        <button id="target-none" class="mode pill">Пусто</button>
+        <button id="toggle-link" class="pill">Link: Off</button>
+        <button id="toggle-user-visibility" class="pill">👁 Рисунок</button>
+        <button id="toggle-grid" class="pill">Сетка</button>
+        <button id="reset-state" class="pill">Reset</button>
+      </div>
+    </section>
 
-      <section class="group">
-        <h2>Настройка слоя</h2>
-        <select id="active-image">
-          <option value="image-ref">Референс</option>
-          <option value="image-user">Рисунок</option>
-        </select>
-        <label>Opacity <input id="opacity-slider" type="range" min="0" max="100" value="100" /></label>
-        <label>Brightness <input id="brightness-slider" type="range" min="0" max="200" value="100" /></label>
-        <label>Contrast <input id="contrast-slider" type="range" min="0" max="200" value="100" /></label>
-        <button id="reset-image-style">Сбросить фильтры</button>
-        <div class="row">
-          <button id="nudge-up">↑</button>
-          <button id="nudge-down">↓</button>
-        </div>
-        <div class="row">
-          <button id="nudge-left">←</button>
-          <button id="nudge-right">→</button>
-        </div>
-      </section>
+    <section class="drawer" id="drawer">
+      <h3 style="margin:0 0 8px;">Настройки слоя</h3>
+      <label>Opacity <input id="opacity-slider" type="range" min="0" max="100" value="100" /></label>
+      <label>Brightness <input id="brightness-slider" type="range" min="0" max="200" value="100" /></label>
+      <label>Contrast <input id="contrast-slider" type="range" min="0" max="200" value="100" /></label>
+    </section>
 
-      <section class="group">
-        <h2>Фигуры</h2>
-        <div class="row">
-          <button id="add-rect">Rect</button>
-          <button id="add-circle">Circle</button>
-        </div>
-        <button id="add-line">Line</button>
-      </section>
-
-      <section class="group">
-        <h2>История</h2>
-        <div class="row">
-          <button id="undo-btn">Undo</button>
-          <button id="redo-btn">Redo</button>
-        </div>
-      </section>
-
-      <section class="group">
-        <h2>Проекты (IndexedDB)</h2>
-        <input id="project-name" placeholder="Имя проекта" />
-        <button class="primary" id="save-project">Сохранить проект</button>
-        <select id="projects-list" size="5"></select>
-        <div class="row">
-          <button id="load-project">Загрузить</button>
-          <button id="delete-project">Удалить</button>
-        </div>
-      </section>
-
-      <p class="hint">Клик для выделения. Shift+клик — мультивыбор. Перетаскивание/масштаб/поворот через Transformer.</p>
-    </aside>
-    <main id="stage-root"></main>
+    <section class="bottombar">
+      <div class="nudge-grid">
+        <span></span><button id="nudge-up">⬆️</button><span></span>
+        <button id="nudge-left">⬅️</button><button id="nudge-down">⬇️</button><button id="nudge-right">➡️</button>
+        <button id="scale-down">➖</button><button id="rotate-plus">🔄</button><button id="scale-up">➕</button>
+      </div>
+    </section>
   </div>
 
   <script src="https://unpkg.com/konva@9/konva.min.js"></script>

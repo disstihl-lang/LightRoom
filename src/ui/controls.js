@@ -1,35 +1,51 @@
+function bindHold(id, onTick, step = 1) {
+  const el = document.getElementById(id);
+  let timer;
+  const start = (event) => {
+    event.preventDefault();
+    onTick(step);
+    timer = setInterval(() => onTick(step), 50);
+  };
+  const stop = () => {
+    clearInterval(timer);
+    timer = null;
+  };
+
+  el.addEventListener('mousedown', start);
+  el.addEventListener('touchstart', start, { passive: false });
+  window.addEventListener('mouseup', stop);
+  window.addEventListener('touchend', stop);
+  el.addEventListener('mouseleave', stop);
+}
+
 export function bindControls(handlers) {
   const q = (id) => document.getElementById(id);
 
-  q('add-rect').addEventListener('click', handlers.addRect);
-  q('add-circle').addEventListener('click', handlers.addCircle);
-  q('add-line').addEventListener('click', handlers.addLine);
-
-  q('undo-btn').addEventListener('click', handlers.undo);
-  q('redo-btn').addEventListener('click', handlers.redo);
-
   q('ref-input').addEventListener('change', (event) => handlers.loadImage(event, 'image-ref'));
   q('user-input').addEventListener('change', (event) => handlers.loadImage(event, 'image-user'));
-  q('active-image').addEventListener('change', (event) => handlers.setActiveImage(event.target.value));
-  q('opacity-slider').addEventListener('input', () => handlers.updateImageStyle());
-  q('brightness-slider').addEventListener('input', () => handlers.updateImageStyle());
-  q('contrast-slider').addEventListener('input', () => handlers.updateImageStyle());
-  q('reset-image-style').addEventListener('click', handlers.resetImageStyle);
+  q('clear-all').addEventListener('click', handlers.clearAll);
   q('toggle-grid').addEventListener('click', handlers.toggleGrid);
-  q('nudge-up').addEventListener('click', () => handlers.nudgeImage(0, -1));
-  q('nudge-down').addEventListener('click', () => handlers.nudgeImage(0, 1));
-  q('nudge-left').addEventListener('click', () => handlers.nudgeImage(-1, 0));
-  q('nudge-right').addEventListener('click', () => handlers.nudgeImage(1, 0));
+  q('toggle-link').addEventListener('click', handlers.toggleLink);
+  q('toggle-user-visibility').addEventListener('click', handlers.toggleUserVisibility);
+  q('reset-state').addEventListener('click', handlers.resetState);
 
-  q('save-project').addEventListener('click', handlers.saveProject);
-  q('load-project').addEventListener('click', handlers.loadProject);
-  q('delete-project').addEventListener('click', handlers.deleteProject);
+  q('target-ref').addEventListener('click', () => handlers.setActiveImage('image-ref'));
+  q('target-user').addEventListener('click', () => handlers.setActiveImage('image-user'));
+  q('target-none').addEventListener('click', () => handlers.setActiveImage('none'));
+
+  q('opacity-slider').addEventListener('input', handlers.updateImageStyle);
+  q('brightness-slider').addEventListener('input', handlers.updateImageStyle);
+  q('contrast-slider').addEventListener('input', handlers.updateImageStyle);
+
+  bindHold('nudge-up', () => handlers.nudgeImage(0, -1));
+  bindHold('nudge-down', () => handlers.nudgeImage(0, 1));
+  bindHold('nudge-left', () => handlers.nudgeImage(-1, 0));
+  bindHold('nudge-right', () => handlers.nudgeImage(1, 0));
+  bindHold('scale-up', () => handlers.scaleImage(1.01));
+  bindHold('scale-down', () => handlers.scaleImage(0.99));
+  bindHold('rotate-plus', () => handlers.rotateImage(0.8));
 
   return {
-    getProjectName: () => q('project-name').value.trim(),
-    getProjectId: () => q('projects-list').value,
-    getActiveImage: () => q('active-image').value,
-    isLinkedMode: () => q('link-images').checked,
     getImageStyle: () => ({
       opacity: Number(q('opacity-slider').value),
       brightness: Number(q('brightness-slider').value),
@@ -40,15 +56,38 @@ export function bindControls(handlers) {
       q('brightness-slider').value = String(brightness);
       q('contrast-slider').value = String(contrast);
     },
-    setProjects: (projects) => {
-      const list = q('projects-list');
-      list.innerHTML = '';
-      for (const project of projects) {
-        const opt = document.createElement('option');
-        opt.value = project.id;
-        opt.textContent = `${project.name} (${new Date(project.updatedAt).toLocaleString()})`;
-        list.appendChild(opt);
+    setActiveMode: (mode) => {
+      for (const id of ['target-ref', 'target-user', 'target-none']) {
+        q(id).classList.remove('active-ref', 'active-user');
       }
+      if (mode === 'image-ref') q('target-ref').classList.add('active-ref');
+      if (mode === 'image-user') q('target-user').classList.add('active-user');
+    },
+    setLinkState: (value) => {
+      q('toggle-link').textContent = value ? 'Link: On' : 'Link: Off';
+    },
+    setUserVisibility: (value) => {
+      q('toggle-user-visibility').textContent = value ? '👁 Рисунок' : '🚫 Рисунок';
+    },
+    setGridState: (value) => {
+      q('grid-overlay').style.display = value ? 'block' : 'none';
+    },
+    setPlaceholderVisible: (show) => {
+      q('placeholder').classList.toggle('hidden', !show);
+    },
+    setUserUploadEnabled: (enabled) => {
+      q('user-input').disabled = !enabled;
+    },
+    setActionEnabled: (enabled) => {
+      for (const id of ['nudge-up', 'nudge-down', 'nudge-left', 'nudge-right', 'scale-up', 'scale-down', 'rotate-plus']) {
+        q(id).disabled = !enabled;
+      }
+    },
+    setDrawerVisible: (visible) => {
+      q('drawer').style.display = visible ? 'block' : 'none';
+    },
+    setIdleHidden: (hidden) => {
+      q('app-root').classList.toggle('ui-hidden', hidden);
     },
   };
 }
