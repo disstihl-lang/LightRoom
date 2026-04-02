@@ -6,11 +6,13 @@ import { toggleSelection, clearSelection } from './engine/selection.js';
 import { saveProject, listProjects, getProject, deleteProject } from './storage/indexedDb.js';
 
 const stageRoot = document.getElementById('stage-root');
-const { stage, layer, transformer } = createCanvas(stageRoot);
+const { stage, layer, transformer, gridLayer } = createCanvas(stageRoot);
 
 const imageCache = new Map();
 let state = createInitialState();
 const history = createHistory(state);
+let ui;
+let gridVisible = false;
 
 function snapshot() {
   commit(history, state);
@@ -68,6 +70,7 @@ function buildNode(object) {
   }
 
   hydrateNodeFromObject(node, object);
+  applyImageStyle(node, object.style);
 
   node.on('click tap', (event) => {
     event.cancelBubble = true;
@@ -86,6 +89,18 @@ function buildNode(object) {
   });
 
   return node;
+}
+
+function applyImageStyle(node, style = {}) {
+  if (node.className !== 'Image') return;
+  const opacity = Number(style.opacity ?? 100);
+  const brightness = Number(style.brightness ?? 100);
+  const contrast = Number(style.contrast ?? 100);
+
+  node.opacity(Math.max(0, Math.min(1, opacity / 100)));
+  node.filters([Konva.Filters.Brighten, Konva.Filters.Contrast]);
+  node.brightness((brightness - 100) / 100);
+  node.contrast(contrast - 100);
 }
 
 function render() {
@@ -122,20 +137,83 @@ async function loadImage(event, label) {
   const assetId = crypto.randomUUID();
   imageCache.set(assetId, file);
 
-  const object = createObject('image', {
-    x: stage.width() / 2,
-    y: stage.height() / 2,
-    style: {
+  const existing = state.objects.find((obj) => obj.type === 'image' && obj.style?.label === label);
+  if (existing) {
+    existing.style = {
+      ...existing.style,
       label,
       src,
       assetId,
       width: Math.min(bitmap.width, 700),
       height: Math.min(bitmap.height, 700),
-    },
-  });
+    };
+    state.selectedIds = [existing.id];
+  } else {
+    const object = createObject('image', {
+      x: stage.width() / 2,
+      y: stage.height() / 2,
+      style: {
+        label,
+        src,
+        assetId,
+        width: Math.min(bitmap.width, 700),
+        height: Math.min(bitmap.height, 700),
+        opacity: 100,
+        brightness: 100,
+        contrast: 100,
+      },
+    });
+    state.objects.push(object);
+    state.selectedIds = [object.id];
+  }
+  snapshot();
+  render();
+  syncLayerControls();
+}
 
-  state.objects.push(object);
-  state.selectedIds = [object.id];
+function findImageObject(label) {
+  return state.objects.find((obj) => obj.type === 'image' && obj.style?.label === label);
+}
+
+function updateImageStyleFromUi() {
+  const target = ui.getActiveImage();
+  const style = ui.getImageStyle();
+  const applyOn = ui.isLinkedMode() ? ['image-ref', 'image-user'] : [target];
+  for (const label of applyOn) {
+    const object = findImageObject(label);
+    if (!object) continue;
+    object.style = { ...object.style, ...style };
+  }
+  snapshot();
+  render();
+}
+
+function resetImageStyle() {
+  ui.setImageStyle({ opacity: 100, brightness: 100, contrast: 100 });
+  updateImageStyleFromUi();
+}
+
+function syncLayerControls() {
+  const object = findImageObject(ui.getActiveImage());
+  if (!object) {
+    ui.setImageStyle({ opacity: 100, brightness: 100, contrast: 100 });
+    return;
+  }
+  ui.setImageStyle({
+    opacity: object.style.opacity ?? 100,
+    brightness: object.style.brightness ?? 100,
+    contrast: object.style.contrast ?? 100,
+  });
+}
+
+function nudgeImage(dx, dy) {
+  const applyOn = ui.isLinkedMode() ? ['image-ref', 'image-user'] : [ui.getActiveImage()];
+  for (const label of applyOn) {
+    const object = findImageObject(label);
+    if (!object) continue;
+    object.x += dx;
+    object.y += dy;
+  }
   snapshot();
   render();
 }
@@ -175,7 +253,7 @@ async function refreshProjects(ui) {
 }
 
 async function main() {
-  const ui = bindControls({
+  ui = bindControls({
     addRect: () => addShape('rect'),
     addCircle: () => addShape('circle'),
     addLine: () => addShape('line'),
@@ -192,6 +270,15 @@ async function main() {
       render();
     },
     loadImage,
+    setActiveImage: () => syncLayerControls(),
+    updateImageStyle: updateImageStyleFromUi,
+    resetImageStyle,
+    nudgeImage,
+    toggleGrid: () => {
+      gridVisible = !gridVisible;
+      gridLayer.visible(gridVisible);
+      stage.batchDraw();
+    },
     saveProject: async () => {
       const name = ui.getProjectName() || 'Untitled';
       const project = {
@@ -221,6 +308,7 @@ async function main() {
       stage.scale({ x: state.viewport.scale, y: state.viewport.scale });
       commit(history, state);
       render();
+      syncLayerControls();
     },
     deleteProject: async () => {
       const id = ui.getProjectId();
@@ -231,6 +319,7 @@ async function main() {
   });
 
   render();
+  syncLayerControls();
   await refreshProjects(ui);
 }
 

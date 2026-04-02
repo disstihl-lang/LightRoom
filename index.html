@@ -30,6 +30,33 @@
         <h2>Изображения</h2>
         <input id="ref-input" type="file" accept="image/*" />
         <input id="user-input" type="file" accept="image/*" />
+        <div class="row">
+          <button id="toggle-grid">Сетка</button>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;">
+            <input id="link-images" type="checkbox" style="width:auto;margin:0;" />
+            Связать слои
+          </label>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Настройка слоя</h2>
+        <select id="active-image">
+          <option value="image-ref">Референс</option>
+          <option value="image-user">Рисунок</option>
+        </select>
+        <label>Opacity <input id="opacity-slider" type="range" min="0" max="100" value="100" /></label>
+        <label>Brightness <input id="brightness-slider" type="range" min="0" max="200" value="100" /></label>
+        <label>Contrast <input id="contrast-slider" type="range" min="0" max="200" value="100" /></label>
+        <button id="reset-image-style">Сбросить фильтры</button>
+        <div class="row">
+          <button id="nudge-up">↑</button>
+          <button id="nudge-down">↓</button>
+        </div>
+        <div class="row">
+          <button id="nudge-left">←</button>
+          <button id="nudge-right">→</button>
+        </div>
       </section>
 
       <section class="group">
